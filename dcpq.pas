@@ -26,6 +26,8 @@
 program DomainControllerPortQuery;
 
 
+{$MODE OBJFPC}
+
 
 uses
   Classes, 
@@ -37,31 +39,33 @@ uses
   
  const
 	TAB = #9;
-  
+
+
 
 type
 	RQueryPorts = record
-		localIp: string;
-		remoteIp: string;
-		port: string;
-		protocol: string;
-		status: string;
+		localIp: string;		// The local IP of the current server.
+		remoteIp: string;		// The remote IP to check the port on.
+		port: string;			// The port number to check.
+		protocol: string;		// The protocol to test: UDP or TCP.
+		status: integer;		// Result of the portqry. 0=OK, 1=NOT LISTENING, 2=FILTERED or LISTENING
 	end;
-	
+
 	TQueryPorts = array of RQueryPorts;
-  
+
+	
 	RPort = record
 		port: string;
 		portDescription: string;
 		protocol: string;
 	end;
-  
+
 	TPort = array of RPort;
 
 
 	
  var
-	qp: TQueryPorts;
+	arrayQueryPorts: TQueryPorts;
 	arrayPort: TPort;
 	localIp: string;
 
@@ -119,13 +123,13 @@ procedure PortQueryAdd(newLocalIp: string; newRemoteIp: string; newPort: string;
 var
 	i: integer;
 begin
-	i := Length(qp);
+	i := Length(arrayQueryPorts);
 	
-	SetLength(qp, i + 1);
-	qp[i].localIp := newLocalIp;
-	qp[i].remoteIp := newRemoteIp;
-	qp[i].port := newPort;
-	qp[i].protocol := newProtocol;
+	SetLength(arrayQueryPorts, i + 1);
+	arrayQueryPorts[i].localIp := newLocalIp;
+	arrayQueryPorts[i].remoteIp := newRemoteIp;
+	arrayQueryPorts[i].port := newPort;
+	arrayQueryPorts[i].protocol := newProtocol;
 end; // of procedure PortQueryAdd.
 
 
@@ -136,12 +140,47 @@ var
 begin
 	WriteLn;
 	WriteLn('PortQueryShow()');
-	for i := 0 to High(qp) do
+	for i := 0 to High(arrayQueryPorts) do
 	begin
-		WriteLn(qp[i].localIp + Chr(9) + qp[i].remoteIp + Chr(9) + qp[i].port + Chr(9) + qp[i].protocol);
+		WriteLn(arrayQueryPorts[i].localIp + Chr(9) + arrayQueryPorts[i].remoteIp + Chr(9) + arrayQueryPorts[i].port + Chr(9) + arrayQueryPorts[i].protocol);
 	end;
 end;
 
+
+procedure PortQueryShowWithResult();
+var
+	i:  integer;
+begin
+	WriteLn;
+	WriteLn('PortQueryShowWithResult()');
+	for i := 0 to High(arrayQueryPorts) do
+	begin
+		WriteLn(arrayQueryPorts[i].localIp + TAB + arrayQueryPorts[i].remoteIp + TAB + arrayQueryPorts[i].port + TAB + arrayQueryPorts[i].protocol + TAB + IntToStr(arrayQueryPorts[i].status));
+	end;
+end;
+
+
+procedure ExportResultToCsv();
+const
+	SEP = #59;
+
+var
+	i: integer;
+	f: TextFile;
+begin
+	AssignFile(f, 'out.csv');
+
+	ReWrite(f);
+	
+	WriteLn;
+	WriteLn('ExportResultToCsv()');
+	for i := 0 to High(arrayQueryPorts) do
+	begin
+		WriteLn(arrayQueryPorts[i].localIp + TAB + arrayQueryPorts[i].remoteIp + TAB + arrayQueryPorts[i].port + TAB + arrayQueryPorts[i].protocol + TAB + IntToStr(arrayQueryPorts[i].status));
+		WriteLn(f,arrayQueryPorts[i].localIp + SEP + arrayQueryPorts[i].remoteIp + SEP + arrayQueryPorts[i].port + SEP + arrayQueryPorts[i].protocol + SEP + IntToStr(arrayQueryPorts[i].status));
+	end;
+	CloseFile(f);
+end;
 
 
 procedure PortQueryOnAll();
@@ -151,13 +190,16 @@ var
 begin
 	WriteLn;
 	WriteLn('PortQueryOnAll()');
-	for i := 0 to High(qp) do
+	for i := 0 to High(arrayQueryPorts) do
 	begin
-		//WriteLn(qp[i].localIp + Chr(9) + qp[i].remoteIp + Chr(9) + qp[i].port + Chr(9) + qp[i].protocol);
-		r := DoPortQuery(qp[i].remoteIp, qp[i].port, qp[i].protocol);
+		//WriteLn(arrayQueryPorts[i].localIp + Chr(9) + arrayQueryPorts[i].remoteIp + Chr(9) + arrayQueryPorts[i].port + Chr(9) + arrayQueryPorts[i].protocol);
+		r := DoPortQuery(arrayQueryPorts[i].remoteIp, arrayQueryPorts[i].port, arrayQueryPorts[i].protocol);
+		arrayQueryPorts[i].status := r;
 		WriteLn(TAB, 'RESULT=', r);
 	end;
 end;
+
+
 
 
 
@@ -244,8 +286,10 @@ begin
 				// Remove all text 'Addresses:' from the newLine.
 				remoteIp := Trim(StringReplace(remoteIp, 'Addresses:', '', [rfIgnoreCase]));
 			
-				//WriteLn('>>', newLine);
-				if Length(remoteIp) > 0 then
+				// Only add a new port to query when:
+				// 1) the remoteIP contains data,
+				// 2) It's a IPv4 address, skip IPv6 addresses.
+				if (Length(remoteIp) > 0) and (Pos(':', remoteIp) = 0) then
 				begin
 					for i := 0 to High(arrayPort) do
 					begin
@@ -256,23 +300,6 @@ begin
 		end;
 	until Eof(f);
 	Close(f);
-	
-	// vm70as003.rec.nsint, WSUS, McAfee EPO
-	PortQueryAdd(localIp, '10.4.222.17', '80', 'TCP');
-	PortQueryAdd(localIp, '10.4.222.17', '443', 'TCP');
-	PortQueryAdd(localIp, '10.4.222.17', '8081', 'TCP');
-	PortQueryAdd(localIp, '10.4.222.17', '8443', 'TCP');
-	PortQueryAdd(localIp, '10.4.222.17', '8444', 'TCP');
-	PortQueryAdd(localIp, '10.4.222.17', '8530', 'TCP');
-	
-	// VM70AS004.rec.nsint, SCOM
-	PortQueryAdd(localIp, '10.4.222.18', '5723', 'TCP');
-	
-	// VM70AS006.rec.nsint, Splunk SMB
-	PortQueryAdd(localIp, '10.4.222.20', '445', 'TCP');
-				
-	// VM00AS1346.prod.ns.nl KMS
-	PortQueryAdd(localIp, '10.4.139.104', '1688', 'TCP');
 end; // of procedure GetIpsPerDnsDomain.
 
 
@@ -318,8 +345,31 @@ begin
 
 	GetAllDomainTrusts();
 	GetAllDcIpPerDnsDomain();
+	
+	// Now add the extra servers and ports to the systems to query.
+	
+	// VM70AS003.rec.nsint, WSUS, McAfee EPO
+	PortQueryAdd(localIp, '10.4.222.17', '80', 'TCP');
+	PortQueryAdd(localIp, '10.4.222.17', '443', 'TCP');
+	PortQueryAdd(localIp, '10.4.222.17', '8081', 'TCP');
+	PortQueryAdd(localIp, '10.4.222.17', '8443', 'TCP');
+	PortQueryAdd(localIp, '10.4.222.17', '8444', 'TCP');
+	PortQueryAdd(localIp, '10.4.222.17', '8530', 'TCP');
+	
+	// VM70AS004.rec.nsint, SCOM
+	PortQueryAdd(localIp, '10.4.222.18', '5723', 'TCP');
+	
+	// VM70AS006.rec.nsint, Splunk SMB
+	PortQueryAdd(localIp, '10.4.222.20', '445', 'TCP');
+				
+	// VM00AS1346.prod.ns.nl KMS
+	PortQueryAdd(localIp, '10.4.139.104', '1688', 'TCP');
+	
+	
 	PortQueryShow();
 	PortQueryOnAll();
+	//PortQueryShowWithResult();
+	ExportResultToCsv();
 
 	//WriteLn(DoPortQuery('10.4.68.21', '389', 'TCP'));
 	
