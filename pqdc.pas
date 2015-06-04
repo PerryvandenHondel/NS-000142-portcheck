@@ -1,6 +1,6 @@
 //
 //	PROGRAM:
-//		dcpq.exe
+//		PortQueryDomainController.exe (pqdc)
 //
 //	DESCRIPTION:
 //		Run this on a domain controller
@@ -10,15 +10,31 @@
 //			nslookup.exe
 //		are available in the path
 //
-//		Get all trusts from AD 
-//		Determine the Domain Controllers of the trusted domains
-//		Check with portqry.exe the ports.
+//		1) Get all trusts from AD using ADFIND.EXE
+//		2) Determine the Domain Controllers of the trusted domains using the DNS nslookup
+//		3) Check with portqry.exe the ports.
 //
 //	VERSION:
 //		01	2015-06-03	Initial version
-//
+//		
 //
 //		portqry -n 10.0.0.1 -e 53 -p UDP
+//
+//
+//	FUNCTIONS AND PROCEDURES:
+//		function DoPortQuery
+//		function GetBaseDn
+//		procedure GetAllDomainTrusts
+//		procedure PortQueryAdd
+//		procedure PortQueryShow
+//		procedure PortQueryShowWithResult
+//		procedure ExportResultToCsv
+//		procedure ExportResultToSql
+//		procedure PortQueryOnAll
+//		procedure PortAdd
+//		procedure PortShow
+//		procedure GetIpsPerDnsDomain
+//		procedure GetAllDcIpPerDnsDomain
 //
 
 
@@ -68,6 +84,9 @@ type
 	arrayQueryPorts: TQueryPorts;
 	arrayPort: TPort;
 	localIp: string;
+	fileNameOut: string;
+	countTotalPortsToCheck: integer;
+	rootDse: string;
 
 
 
@@ -99,6 +118,46 @@ end; // of procedure DoPortQuery.
 
 
 
+function GetBaseDn(): string;
+//
+//	Get the BaseDN (DC=domain,DC=ext) of the current AD domain.
+//
+
+var
+	p: TProcess;
+	f: TextFile;
+	line: string;
+	r: string;
+	
+begin
+	p := TProcess.Create(nil);
+	p.Executable := 'cmd.exe'; 
+    p.Parameters.Add('/c adfind.exe -f "Whatever=*" >basedn.tmp');
+	p.Options := [poWaitOnExit];
+
+	p.Execute;
+	
+	Assign(f, 'basedn.tmp');
+	
+	{I+}
+	Reset(f);
+	while not eof(f) do
+	begin
+		ReadLn(f, line);
+		//WriteLn('GetIpsP
+		if Pos('Base DN: ', line) > 0 then
+		begin
+			r := Trim(StringReplace(line,  'Base DN: ', '', [rfIgnoreCase]));
+			break;
+		end;
+	end;
+	Close(f);
+	
+	GetBaseDn := r;
+end; // of function GetBaseDn
+
+
+
 procedure GetAllDomainTrusts();
 //
 //	Use ADFIND to make a list to get all trusts into a file trust.tmp
@@ -112,7 +171,7 @@ begin
 	p := TProcess.Create(nil);
 
 	p.Executable := 'cmd.exe'; 
-    p.Parameters.Add('/c adfind.exe -b "CN=System,DC=prod,DC=ns,DC=nl" -f "(objectClass=trustedDomain)" trustPartner -csv  -nodn -nocsvheader -nocsvq >trusts.tmp');
+    p.Parameters.Add('/c adfind.exe -b "CN=System,' + rootDse + '" -f "(objectClass=trustedDomain)" trustPartner -csv  -nodn -nocsvheader -nocsvq >trusts.tmp');
 	p.Options := [poWaitOnExit];	// Wait until the external program is finished.
 	p.Execute;
 end; // of procedure GetAllDomainTrusts
@@ -168,7 +227,7 @@ var
 	i: integer;
 	f: TextFile;
 begin
-	AssignFile(f, 'out.csv');
+	AssignFile(f, fileNameOut + '.csv');
 
 	ReWrite(f);
 	
@@ -178,6 +237,42 @@ begin
 	begin
 		WriteLn(arrayQueryPorts[i].localIp + TAB + arrayQueryPorts[i].remoteIp + TAB + arrayQueryPorts[i].port + TAB + arrayQueryPorts[i].protocol + TAB + IntToStr(arrayQueryPorts[i].status));
 		WriteLn(f,arrayQueryPorts[i].localIp + SEP + arrayQueryPorts[i].remoteIp + SEP + arrayQueryPorts[i].port + SEP + arrayQueryPorts[i].protocol + SEP + IntToStr(arrayQueryPorts[i].status));
+	end;
+	CloseFile(f);
+end;
+
+
+
+procedure ExportResultToSql();
+const
+	SEP = #59;
+
+var
+	i: integer;
+	f: TextFile;
+	sql: string;
+begin
+	AssignFile(f, fileNameOut + '.sql');
+
+	ReWrite(f);
+	
+	WriteLn;
+	WriteLn('ExportResultToSql()');
+	for i := 0 to High(arrayQueryPorts) do
+	begin
+		WriteLn(arrayQueryPorts[i].localIp + TAB + arrayQueryPorts[i].remoteIp + TAB + arrayQueryPorts[i].port + TAB + arrayQueryPorts[i].protocol + TAB + IntToStr(arrayQueryPorts[i].status));
+		//WriteLn(f,arrayQueryPorts[i].localIp + SEP + arrayQueryPorts[i].remoteIp + SEP + arrayQueryPorts[i].port + SEP + arrayQueryPorts[i].protocol + SEP + IntToStr(arrayQueryPorts[i].status));
+		sql := 'INSERT INTO system_port_query ';
+		sql := sql + 'SET ';
+		//WriteLn(DateTimeToStr(Now));
+		sql := sql + 'check_datetime=''' + GetProperDateTime(Now()) + ''',';
+		sql := sql + 'local_ip=''' + arrayQueryPorts[i].localIp + ''',';
+		sql := sql + 'remote_ip=''' + arrayQueryPorts[i].remoteIp + ''',';
+		sql := sql + 'port=' + arrayQueryPorts[i].port + ',';
+		sql := sql + 'protocol=''' + arrayQueryPorts[i].protocol + ''',';
+		sql := sql + 'status=' + IntToStr(arrayQueryPorts[i].status) + ';';
+		
+		WriteLn(f, sql);
 	end;
 	CloseFile(f);
 end;
@@ -195,7 +290,7 @@ begin
 		//WriteLn(arrayQueryPorts[i].localIp + Chr(9) + arrayQueryPorts[i].remoteIp + Chr(9) + arrayQueryPorts[i].port + Chr(9) + arrayQueryPorts[i].protocol);
 		r := DoPortQuery(arrayQueryPorts[i].remoteIp, arrayQueryPorts[i].port, arrayQueryPorts[i].protocol);
 		arrayQueryPorts[i].status := r;
-		WriteLn(TAB, 'RESULT=', r);
+		WriteLn(TAB, i, '/', countTotalPortsToCheck, ':', TAB, 'RESULT=', r);
 	end;
 end;
 
@@ -272,7 +367,6 @@ begin
 			foundCount := 0;
 		end;
 		
-		
 		if foundName = true then
 		begin
 			foundCount := foundCount + 1;
@@ -293,6 +387,8 @@ begin
 				begin
 					for i := 0 to High(arrayPort) do
 					begin
+						// Increase the counter of tests to do.
+						countTotalPortsToCheck := countTotalPortsToCheck + 1;
 						PortQueryAdd(localIp, remoteIp, arrayPort[i].port, arrayPort[i].protocol);
 					end;
 				end;
@@ -328,11 +424,26 @@ begin
 end; // of procedure GetAllDcsPerDnsDomain.
 
 
+
+procedure ProgInit();
 begin
 	localIp := GetLocalIp();
 
-	WriteLn('Local IP=', localIp);
+	rootDse := GetBaseDn();
 	
+	fileNameOut := 'pqdc-' + GetCurrentComputerName() + '-' + GetDateFs() + '_' + GetTimeFs();
+	
+	countTotalPortsToCheck := 0;
+	
+	WriteLn('Output in: ' + fileNameOut);
+	WriteLn('Local IP:  ' + localIp);
+	WriteLn('Root DSE:  ' + rootDse);
+end; // of procedure ProgInit
+
+
+
+procedure ProgRun();
+begin
 	PortAdd('88', 'TCP');
 	PortAdd('135', 'TCP');
 	PortAdd('389', 'TCP');
@@ -365,14 +476,39 @@ begin
 	// VM00AS1346.prod.ns.nl KMS
 	PortQueryAdd(localIp, '10.4.139.104', '1688', 'TCP');
 	
+	countTotalPortsToCheck := countTotalPortsToCheck + 9;
 	
-	PortQueryShow();
+	WriteLn('There are ', countTotalPortsToCheck, ' ports found to be tested.');
+	
+	//PortQueryShow();
 	PortQueryOnAll();
 	//PortQueryShowWithResult();
 	ExportResultToCsv();
+	ExportResultToSql();
 
 	//WriteLn(DoPortQuery('10.4.68.21', '389', 'TCP'));
 	
 	//WriteLn(DoPortQuery('10.146.1.15', '464', 'TCP'));
-	
-end. // of program TestLaunchProcessAdFind.
+end; // of procedure ProgInit
+
+
+
+procedure ProgTest();
+begin
+	WriteLn(GetBaseDn());
+end; // of procedure ProgInit
+
+
+
+procedure ProgDone();
+begin
+end; // of procedure ProgInit
+
+
+
+begin
+	ProgInit();
+	ProgRun();
+	//ProgTest();
+	ProgDone();
+end. // of program PortQueryDomainController.
