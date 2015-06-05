@@ -10,8 +10,8 @@
 //			nslookup.exe
 //		are available in the path
 //
-//		1) Get all trusts from AD using ADFIND.EXE
-//		2) Determine the Domain Controllers of the trusted domains using the DNS nslookup
+//		1) Get all trusts from AD using ADFIND.EXE > GetAllDomainTrusts
+//		2) Determine the Domain Controllers of the trusted domains using a DNS nslookup > GetIpsPerDnsDomain
 //		3) Check with portqry.exe the ports.
 //
 //	VERSION:
@@ -23,7 +23,6 @@
 //
 //	FUNCTIONS AND PROCEDURES:
 //		function DoPortQuery
-//		function GetBaseDn
 //		procedure GetAllDomainTrusts
 //		procedure PortQueryAdd
 //		procedure PortQueryShow
@@ -118,46 +117,6 @@ end; // of procedure DoPortQuery.
 
 
 
-function GetBaseDn(): string;
-//
-//	Get the BaseDN (DC=domain,DC=ext) of the current AD domain.
-//
-
-var
-	p: TProcess;
-	f: TextFile;
-	line: string;
-	r: string;
-	
-begin
-	p := TProcess.Create(nil);
-	p.Executable := 'cmd.exe'; 
-    p.Parameters.Add('/c adfind.exe -f "Whatever=*" >basedn.tmp');
-	p.Options := [poWaitOnExit];
-
-	p.Execute;
-	
-	Assign(f, 'basedn.tmp');
-	
-	{I+}
-	Reset(f);
-	while not eof(f) do
-	begin
-		ReadLn(f, line);
-		//WriteLn('GetIpsP
-		if Pos('Base DN: ', line) > 0 then
-		begin
-			r := Trim(StringReplace(line,  'Base DN: ', '', [rfIgnoreCase]));
-			break;
-		end;
-	end;
-	Close(f);
-	
-	GetBaseDn := r;
-end; // of function GetBaseDn
-
-
-
 procedure GetAllDomainTrusts();
 //
 //	Use ADFIND to make a list to get all trusts into a file trust.tmp
@@ -217,6 +176,7 @@ begin
 		WriteLn(arrayQueryPorts[i].localIp + TAB + arrayQueryPorts[i].remoteIp + TAB + arrayQueryPorts[i].port + TAB + arrayQueryPorts[i].protocol + TAB + IntToStr(arrayQueryPorts[i].status));
 	end;
 end;
+
 
 
 procedure ExportResultToCsv();
@@ -296,9 +256,10 @@ end;
 
 
 
-
-
 procedure PortAdd(newPort: string; newProtocol: string);
+//
+// Add a new port to the query array.
+//
 var
 	i: integer;
 begin
@@ -313,6 +274,9 @@ end;
 
 
 procedure PortShow();
+//
+// Show all ports to query.
+//
 var
 	i:  integer;
 begin
@@ -327,6 +291,10 @@ end;
 
 
 procedure GetIpsPerDnsDomain(dns: string);
+//
+// Do a nslookup and resolve all IP addresses of Domaion Controllers an AD domain.
+// Update the array to query the ports with PortQueryAdd().
+//
 var
 	p: TProcess;
 	f: TextFile;
@@ -460,23 +428,27 @@ begin
 	// Now add the extra servers and ports to the systems to query.
 	
 	// VM70AS003.rec.nsint, WSUS, McAfee EPO
-	PortQueryAdd(localIp, '10.4.222.17', '80', 'TCP');
-	PortQueryAdd(localIp, '10.4.222.17', '443', 'TCP');
-	PortQueryAdd(localIp, '10.4.222.17', '8081', 'TCP');
-	PortQueryAdd(localIp, '10.4.222.17', '8443', 'TCP');
-	PortQueryAdd(localIp, '10.4.222.17', '8444', 'TCP');
-	PortQueryAdd(localIp, '10.4.222.17', '8530', 'TCP');
+	PortQueryAdd(localIp, '10.4.222.17', '80', 'TCP'); 		// 1
+	PortQueryAdd(localIp, '10.4.222.17', '443', 'TCP'); 	// 2
+	PortQueryAdd(localIp, '10.4.222.17', '8081', 'TCP'); 	// 3
+	PortQueryAdd(localIp, '10.4.222.17', '8443', 'TCP');	// 4
+	PortQueryAdd(localIp, '10.4.222.17', '8444', 'TCP');	// 5
+	PortQueryAdd(localIp, '10.4.222.17', '8530', 'TCP');	// 6
 	
 	// VM70AS004.rec.nsint, SCOM
-	PortQueryAdd(localIp, '10.4.222.18', '5723', 'TCP');
+	PortQueryAdd(localIp, '10.4.222.18', '5723', 'TCP');	// 7
 	
 	// VM70AS006.rec.nsint, Splunk SMB
-	PortQueryAdd(localIp, '10.4.222.20', '445', 'TCP');
+	PortQueryAdd(localIp, '10.4.222.20', '445', 'TCP');		// 8
 				
 	// VM00AS1346.prod.ns.nl KMS
-	PortQueryAdd(localIp, '10.4.139.104', '1688', 'TCP');
+	PortQueryAdd(localIp, '10.4.139.104', '1688', 'TCP');	// 9
 	
-	countTotalPortsToCheck := countTotalPortsToCheck + 9;
+	// Add DNS servers
+	PortQueryAdd(localIp, '10.4.34.11', '53', 'TCP');		// 10
+	PortQueryAdd(localIp, '10.12.145.11', '53', 'TCP');		// 11
+	
+	countTotalPortsToCheck := countTotalPortsToCheck + 11;
 	
 	WriteLn('There are ', countTotalPortsToCheck, ' ports found to be tested.');
 	
@@ -496,6 +468,7 @@ end; // of procedure ProgInit
 procedure ProgTest();
 begin
 	WriteLn(GetBaseDn());
+	WriteLn(ResolveFqdn('10.145.193.15'));
 end; // of procedure ProgInit
 
 
