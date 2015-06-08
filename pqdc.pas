@@ -86,7 +86,7 @@ type
 	arrayPort: TPort;
 	localIp: string;
 	fileNameOut: string;
-	countTotalPortsToCheck: integer;
+	giTotalPortsToCheck: integer;
 	rootDse: string;
 	gbDoResolve: boolean;				// Turn on or off the resolving of IP addresses.
 	gbDoCsv: boolean;
@@ -186,7 +186,7 @@ begin
 	arrayQueryPorts[i].port := newPort;
 	arrayQueryPorts[i].protocol := newProtocol;
 	
-	countTotalPortsToCheck := countTotalPortsToCheck + 1
+	giTotalPortsToCheck := giTotalPortsToCheck + 1
 end; // of procedure PortQueryAdd.
 
 
@@ -327,7 +327,7 @@ begin
 		r := DoPortQuery(arrayQueryPorts[i].remoteIp, arrayQueryPorts[i].port, arrayQueryPorts[i].protocol);
 		arrayQueryPorts[i].status := r;
 		// Fix issue#2: array loop is from 0 to high, display is i + 1.
-		WriteLn(TAB, i + 1, '/', countTotalPortsToCheck, ':', TAB, 'RESULT=', r);
+		WriteLn(TAB, i + 1, '/', giTotalPortsToCheck, ':', TAB, 'RESULT=', r);
 	end;
 end;
 
@@ -433,7 +433,7 @@ begin
 					for i := 0 to High(arrayPort) do
 					begin
 						// Increase the counter of tests to do.
-						//countTotalPortsToCheck := countTotalPortsToCheck + 1;
+						//giTotalPortsToCheck := giTotalPortsToCheck + 1;
 						PortQueryAdd(localIp, remoteIp, arrayPort[i].port, arrayPort[i].protocol);
 					end;
 				end;
@@ -562,7 +562,7 @@ begin
 	
 	fileNameOut := 'pqdc-' + GetCurrentComputerName() + '-' + GetDateFs() + '_' + GetTimeFs();
 	
-	countTotalPortsToCheck := 0;
+	giTotalPortsToCheck := 0;
 	
 	gsLocalFqdn := localIp;
 	
@@ -615,9 +615,9 @@ begin
 	PortQueryAdd(localIp, '10.12.145.11', '53', 'TCP');		// 14
 	
 	// Count in the procedure PortQueryAdd
-	//countTotalPortsToCheck := countTotalPortsToCheck + 14;
+	//giTotalPortsToCheck := giTotalPortsToCheck + 14;
 	
-	WriteLn('There are ', countTotalPortsToCheck, ' ports found to be tested.');
+	WriteLn('There are ', giTotalPortsToCheck, ' ports found to be tested.');
 	
 	//PortQueryShow();
 	
