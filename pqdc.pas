@@ -86,6 +86,9 @@ type
 	fileNameOut: string;
 	countTotalPortsToCheck: integer;
 	rootDse: string;
+	gbDoResolve: boolean;				// Turn on or off the resolving of IP addresses.
+	gsLocalFqdn: string;				// Local FQDN.
+	ip: string;
 
 
 
@@ -137,6 +140,36 @@ end; // of procedure GetAllDomainTrusts
 
 
 
+function ResolveFqdnDc(ip: string): string;
+//
+// Resolve the IP to an FQDN
+// Redo it until the result doesn't contain:
+//	1)	._msdcs in the FQDN
+//	2) 	the FQDN <> current domain name.
+//
+var
+	bCorrect: boolean;
+	x: integer;
+	fqdn: string;
+	sDnsDomain: string;
+begin
+	
+	bCorrect := false;
+	x := 0;
+	sDnsDomain := GetDnsDomain();
+	repeat
+		x := x + 1;
+		fqdn := ResolveFqdn(ip);
+		//WriteLn(TAB, x, TAB, 'fqdn=', fqdn, TAB, sDnsDomain);
+		
+		if (Pos('._msdcs.', fqdn) = 0) and (fqdn <> sDnsDomain) then
+			bCorrect := true;
+	until bCorrect = true;
+	ResolveFqdnDc := fqdn;
+end; // of function ResolveFdqnDc.
+
+
+
 procedure PortQueryAdd(newLocalIp: string; newRemoteIp: string; newPort: string; newProtocol: string);
 var
 	i: integer;
@@ -180,12 +213,17 @@ end;
 
 
 procedure ExportResultToCsv();
+//
+// Export the data in the arrayQueryPorts to an Excel CSV file.
+// Separator char is ; (#59)
+//
 const
-	SEP = #59;
+	SEP = #59; // ;
 
 var
 	i: integer;
 	f: TextFile;
+	buffer: string;
 begin
 	AssignFile(f, fileNameOut + '.csv');
 
@@ -195,8 +233,37 @@ begin
 	WriteLn('ExportResultToCsv()');
 	for i := 0 to High(arrayQueryPorts) do
 	begin
-		WriteLn(arrayQueryPorts[i].localIp + TAB + arrayQueryPorts[i].remoteIp + TAB + arrayQueryPorts[i].port + TAB + arrayQueryPorts[i].protocol + TAB + IntToStr(arrayQueryPorts[i].status));
-		WriteLn(f,arrayQueryPorts[i].localIp + SEP + arrayQueryPorts[i].remoteIp + SEP + arrayQueryPorts[i].port + SEP + arrayQueryPorts[i].protocol + SEP + IntToStr(arrayQueryPorts[i].status));
+		// Add the local IP to the buffer.
+		buffer := arrayQueryPorts[i].localIp + SEP;
+		
+		// Add the local FQDN to the buffer.
+		if gbDoResolve = true then
+			buffer := buffer + gsLocalFqdn + SEP;
+		
+		// Add the remote Ip to the buffer.
+		buffer := buffer + arrayQueryPorts[i].remoteIp + SEP;
+		
+		// Add the FQDN of the remote IP to the buffer.
+		if gbDoResolve = true then
+			buffer := buffer + ResolveFqdnDc(arrayQueryPorts[i].remoteIp) + SEP;
+			
+		// Add the port to buffer.
+		buffer := buffer + arrayQueryPorts[i].port + SEP;
+			
+		// Add the protocol to the buffer.
+		buffer := buffer + arrayQueryPorts[i].protocol + SEP;
+	
+		// Add the status of the PortQry to the buffer.
+		if arrayQueryPorts[i].status = 0 then
+			buffer := buffer + 'L'
+		else
+			buffer := buffer + 'F';
+	
+		// Write to screen.
+		WriteLn(buffer);
+		
+		// Write to the CSV file.
+		WriteLn(f,buffer);
 	end;
 	CloseFile(f);
 end;
@@ -403,6 +470,14 @@ begin
 	
 	countTotalPortsToCheck := 0;
 	
+	gsLocalFqdn := localIp;
+	
+	gbDoResolve := true;
+	
+	if gbDoResolve = true then
+		gsLocalFqdn := ResolveFqdnDc(localIp);
+		
+	
 	WriteLn('Output in: ' + fileNameOut);
 	WriteLn('Local IP:  ' + localIp);
 	WriteLn('Root DSE:  ' + rootDse);
@@ -445,10 +520,11 @@ begin
 	PortQueryAdd(localIp, '10.4.139.104', '1688', 'TCP');	// 9
 	
 	// Add DNS servers
-	PortQueryAdd(localIp, '10.4.34.11', '53', 'TCP');		// 10
-	PortQueryAdd(localIp, '10.12.145.11', '53', 'TCP');		// 11
+	PortQueryAdd(localIp, '10.4.34.12', '53', 'TCP');		// 10
+	PortQueryAdd(localIp, '10.4.34.11', '53', 'TCP');		// 11
+	PortQueryAdd(localIp, '10.12.145.11', '53', 'TCP');		// 12
 	
-	countTotalPortsToCheck := countTotalPortsToCheck + 11;
+	countTotalPortsToCheck := countTotalPortsToCheck + 12;
 	
 	WriteLn('There are ', countTotalPortsToCheck, ' ports found to be tested.');
 	
@@ -467,9 +543,21 @@ end; // of procedure ProgInit
 
 procedure ProgTest();
 begin
-	WriteLn(GetBaseDn());
-	WriteLn(ResolveFqdn('10.145.193.15'));
-end; // of procedure ProgInit
+	//WriteLn(GetBaseDn());
+	//WriteLn(ResolveFqdn('10.145.193.15'));
+	
+	ip := '10.4.68.17';
+	WriteLn('RESOLVE ' + ip + ' TO FQDN: ' + ResolveFqdnDc(ip));
+
+	ip := '10.4.68.20';
+	WriteLn('RESOLVE ' + ip + ' TO FQDN: ' + ResolveFqdnDc(ip));
+
+	ip := '10.4.68.14';
+	WriteLn('RESOLVE ' + ip + ' TO FQDN: ' + ResolveFqdnDc(ip));
+
+	ip := '10.4.68.16';
+	WriteLn('RESOLVE ' + ip + ' TO FQDN: ' + ResolveFqdnDc(ip));
+end; // of procedure ProgTest
 
 
 
