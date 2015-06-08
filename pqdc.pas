@@ -53,8 +53,10 @@ uses
 
   
  const
-	TAB = #9;
-
+	TAB = 					#9;
+	VERSION =				'01';
+	DESCRIPTION =			'PortQueryDomainController';
+	ID = 					'142';		
 
 
 type
@@ -87,6 +89,8 @@ type
 	countTotalPortsToCheck: integer;
 	rootDse: string;
 	gbDoResolve: boolean;				// Turn on or off the resolving of IP addresses.
+	gbDoCsv: boolean;
+	gbDoSql: boolean;
 	gsLocalFqdn: string;				// Local FQDN.
 	ip: string;
 
@@ -181,6 +185,8 @@ begin
 	arrayQueryPorts[i].remoteIp := newRemoteIp;
 	arrayQueryPorts[i].port := newPort;
 	arrayQueryPorts[i].protocol := newProtocol;
+	
+	countTotalPortsToCheck := countTotalPortsToCheck + 1
 end; // of procedure PortQueryAdd.
 
 
@@ -230,7 +236,7 @@ begin
 	ReWrite(f);
 	
 	WriteLn;
-	WriteLn('ExportResultToCsv()');
+	WriteLn('ExportResultToCsv() ' + fileNameOut + '.csv');
 	for i := 0 to High(arrayQueryPorts) do
 	begin
 		// Add the local IP to the buffer.
@@ -254,13 +260,16 @@ begin
 		buffer := buffer + arrayQueryPorts[i].protocol + SEP;
 	
 		// Add the status of the PortQry to the buffer.
+		// Issue#3: fix. Do not export the number but letters for port query status:
+		//  L = Listening.
+		//	F = Failed listening port.
 		if arrayQueryPorts[i].status = 0 then
 			buffer := buffer + 'L'
 		else
 			buffer := buffer + 'F';
 	
 		// Write to screen.
-		WriteLn(buffer);
+		//WriteLn(buffer);
 		
 		// Write to the CSV file.
 		WriteLn(f,buffer);
@@ -284,10 +293,10 @@ begin
 	ReWrite(f);
 	
 	WriteLn;
-	WriteLn('ExportResultToSql()');
+	WriteLn('ExportResultToSql() ' + fileNameOut + '.sql');
 	for i := 0 to High(arrayQueryPorts) do
 	begin
-		WriteLn(arrayQueryPorts[i].localIp + TAB + arrayQueryPorts[i].remoteIp + TAB + arrayQueryPorts[i].port + TAB + arrayQueryPorts[i].protocol + TAB + IntToStr(arrayQueryPorts[i].status));
+		//WriteLn(arrayQueryPorts[i].localIp + TAB + arrayQueryPorts[i].remoteIp + TAB + arrayQueryPorts[i].port + TAB + arrayQueryPorts[i].protocol + TAB + IntToStr(arrayQueryPorts[i].status));
 		//WriteLn(f,arrayQueryPorts[i].localIp + SEP + arrayQueryPorts[i].remoteIp + SEP + arrayQueryPorts[i].port + SEP + arrayQueryPorts[i].protocol + SEP + IntToStr(arrayQueryPorts[i].status));
 		sql := 'INSERT INTO system_port_query ';
 		sql := sql + 'SET ';
@@ -317,7 +326,8 @@ begin
 		//WriteLn(arrayQueryPorts[i].localIp + Chr(9) + arrayQueryPorts[i].remoteIp + Chr(9) + arrayQueryPorts[i].port + Chr(9) + arrayQueryPorts[i].protocol);
 		r := DoPortQuery(arrayQueryPorts[i].remoteIp, arrayQueryPorts[i].port, arrayQueryPorts[i].protocol);
 		arrayQueryPorts[i].status := r;
-		WriteLn(TAB, i, '/', countTotalPortsToCheck, ':', TAB, 'RESULT=', r);
+		// Fix issue#2: array loop is from 0 to high, display is i + 1.
+		WriteLn(TAB, i + 1, '/', countTotalPortsToCheck, ':', TAB, 'RESULT=', r);
 	end;
 end;
 
@@ -423,7 +433,7 @@ begin
 					for i := 0 to High(arrayPort) do
 					begin
 						// Increase the counter of tests to do.
-						countTotalPortsToCheck := countTotalPortsToCheck + 1;
+						//countTotalPortsToCheck := countTotalPortsToCheck + 1;
 						PortQueryAdd(localIp, remoteIp, arrayPort[i].port, arrayPort[i].protocol);
 					end;
 				end;
@@ -460,10 +470,94 @@ end; // of procedure GetAllDcsPerDnsDomain.
 
 
 
-procedure ProgInit();
-begin
-	localIp := GetLocalIp();
 
+procedure ProgramTitle();
+begin
+	WriteLn();
+	WriteLn(StringOfChar('-', 80));
+	WriteLn(UpperCase(GetProgramName()) + ' -- Version: ' + VERSION + ' -- Unique ID: ' + ID);
+	WriteLn(DESCRIPTION);
+	WriteLn(StringOfChar('-', 80));	
+end; // of procedure ProgramTitle()
+
+
+
+procedure ProgramUsage();
+var
+	p:	string;
+begin
+	p := ParamStr(0);
+
+	WriteLn();
+	WriteLn('Switches:');
+	WriteLn(TAB + '--csv                    Output in CSV format, seperator char is ;');
+	WriteLn(TAB + '--sql                    Output in SQL format');
+	WriteLn(TAB + '--resolve                Also resolve the IP address to FQDN''s');
+	WriteLn(TAB + '--help, -h, -?           Show the help');
+	WriteLn();
+	WriteLn('Usage:');
+	WriteLn(TAB + p + ' [switche(s)]');
+	WriteLn();
+end; // of procedure ProgramUsage()
+
+
+
+procedure ProgInit();
+var	
+	i: integer;
+begin
+	// Process the parameters
+	
+	//WriteLn('ProgramInit()');
+	//WriteLn('ParamCount: ', ParamCount);
+	
+	gbDoCsv := false;
+	gbDoSql := false;
+	gbDoResolve := false;
+	
+	ProgramTitle();
+	
+	if ParamCount = 0 then
+	begin
+		ProgramUsage();
+		Halt(0);
+	end
+	else
+	begin
+		for i := 1 to ParamCount do
+		begin
+			//Writeln(i, ': ', ParamStr(i));
+			
+			case LowerCase(ParamStr(i)) of
+				'--csv':
+					begin
+						gbDoCsv := true;
+						WriteLn('Output in CSV format');
+					end;
+				'--sql':
+					begin
+						gbDoSql := true;
+						WriteLn('Output in SQL format');
+					end;
+				'--resolve':
+					begin
+						gbDoResolve := true;
+						WriteLn('FQDN resolve on');
+					end;
+				'--help', '-h', '-?':
+					begin
+						ProgramUsage();
+						Halt(0);
+					end;
+			end; // of Case
+		end; // of For
+	end;
+	
+	localIp := GetLocalIp();
+	
+	if gbDoResolve = true then
+		gsLocalFqdn := ResolveFqdnDc(localIp);
+		
 	rootDse := GetBaseDn();
 	
 	fileNameOut := 'pqdc-' + GetCurrentComputerName() + '-' + GetDateFs() + '_' + GetTimeFs();
@@ -471,12 +565,6 @@ begin
 	countTotalPortsToCheck := 0;
 	
 	gsLocalFqdn := localIp;
-	
-	gbDoResolve := true;
-	
-	if gbDoResolve = true then
-		gsLocalFqdn := ResolveFqdnDc(localIp);
-		
 	
 	WriteLn('Output in: ' + fileNameOut);
 	WriteLn('Local IP:  ' + localIp);
@@ -503,36 +591,45 @@ begin
 	// Now add the extra servers and ports to the systems to query.
 	
 	// VM70AS003.rec.nsint, WSUS, McAfee EPO
-	PortQueryAdd(localIp, '10.4.222.17', '80', 'TCP'); 		// 1
-	PortQueryAdd(localIp, '10.4.222.17', '443', 'TCP'); 	// 2
-	PortQueryAdd(localIp, '10.4.222.17', '8081', 'TCP'); 	// 3
-	PortQueryAdd(localIp, '10.4.222.17', '8443', 'TCP');	// 4
-	PortQueryAdd(localIp, '10.4.222.17', '8444', 'TCP');	// 5
-	PortQueryAdd(localIp, '10.4.222.17', '8530', 'TCP');	// 6
+	PortQueryAdd(localIp, '10.4.222.15', '3389', 'TCP'); 	// 1
+	PortQueryAdd(localIp, '10.4.222.16', '3389', 'TCP'); 	// 2
+	PortQueryAdd(localIp, '10.4.222.17', '80', 'TCP'); 		// 3
+	PortQueryAdd(localIp, '10.4.222.17', '443', 'TCP'); 	// 4
+	PortQueryAdd(localIp, '10.4.222.17', '8081', 'TCP'); 	// 5
+	PortQueryAdd(localIp, '10.4.222.17', '8443', 'TCP');	// 6
+	PortQueryAdd(localIp, '10.4.222.17', '8444', 'TCP');	// 7
+	PortQueryAdd(localIp, '10.4.222.17', '8530', 'TCP');	// 8
 	
 	// VM70AS004.rec.nsint, SCOM
-	PortQueryAdd(localIp, '10.4.222.18', '5723', 'TCP');	// 7
+	PortQueryAdd(localIp, '10.4.222.18', '5723', 'TCP');	// 9
 	
 	// VM70AS006.rec.nsint, Splunk SMB
-	PortQueryAdd(localIp, '10.4.222.20', '445', 'TCP');		// 8
+	PortQueryAdd(localIp, '10.4.222.20', '445', 'TCP');		// 10
 				
 	// VM00AS1346.prod.ns.nl KMS
-	PortQueryAdd(localIp, '10.4.139.104', '1688', 'TCP');	// 9
+	PortQueryAdd(localIp, '10.4.139.104', '1688', 'TCP');	// 11
 	
 	// Add DNS servers
-	PortQueryAdd(localIp, '10.4.34.12', '53', 'TCP');		// 10
-	PortQueryAdd(localIp, '10.4.34.11', '53', 'TCP');		// 11
-	PortQueryAdd(localIp, '10.12.145.11', '53', 'TCP');		// 12
+	PortQueryAdd(localIp, '10.4.34.12', '53', 'TCP');		// 12
+	PortQueryAdd(localIp, '10.4.34.11', '53', 'TCP');		// 13
+	PortQueryAdd(localIp, '10.12.145.11', '53', 'TCP');		// 14
 	
-	countTotalPortsToCheck := countTotalPortsToCheck + 12;
+	// Count in the procedure PortQueryAdd
+	//countTotalPortsToCheck := countTotalPortsToCheck + 14;
 	
 	WriteLn('There are ', countTotalPortsToCheck, ' ports found to be tested.');
 	
 	//PortQueryShow();
+	
 	PortQueryOnAll();
+	
 	//PortQueryShowWithResult();
-	ExportResultToCsv();
-	ExportResultToSql();
+	
+	if gbDoCsv = true then
+		ExportResultToCsv();
+		
+	if gbDoSql = true then
+		ExportResultToSql();
 
 	//WriteLn(DoPortQuery('10.4.68.21', '389', 'TCP'));
 	
@@ -558,6 +655,9 @@ begin
 	ip := '10.4.68.16';
 	WriteLn('RESOLVE ' + ip + ' TO FQDN: ' + ResolveFqdnDc(ip));
 end; // of procedure ProgTest
+
+
+
 
 
 
