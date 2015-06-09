@@ -61,6 +61,7 @@ uses
 
 type
 	RQueryPorts = record
+		checked: string;		// The date and time when checked
 		localIp: string;		// The local IP of the current server.
 		remoteIp: string;		// The remote IP to check the port on.
 		port: string;			// The port number to check.
@@ -110,7 +111,7 @@ function DoPortQuery(remoteIp: string; port: string; protocol: string): integer;
 var
 	p: TProcess;
 begin	
-	WriteLn('DoPortQuery(' + remoteIp + ', ' + port + ', ' + protocol + ')');
+	//WriteLn('DoPortQuery(' + remoteIp + ', ' + port + ', ' + protocol + ')');
 
 	p := TProcess.Create(nil);
 	p.Executable := 'cmd.exe'; 
@@ -301,7 +302,8 @@ begin
 		sql := 'INSERT INTO system_port_query ';
 		sql := sql + 'SET ';
 		//WriteLn(DateTimeToStr(Now));
-		sql := sql + 'check_datetime=''' + GetProperDateTime(Now()) + ''',';
+		//sql := sql + 'check_datetime=''' + GetProperDateTime(Now()) + ''',';
+		sql := sql + 'check_datetime=''' +arrayQueryPorts[i].checked + ''',';
 		sql := sql + 'local_ip=''' + arrayQueryPorts[i].localIp + ''',';
 		sql := sql + 'remote_ip=''' + arrayQueryPorts[i].remoteIp + ''',';
 		sql := sql + 'port=' + arrayQueryPorts[i].port + ',';
@@ -325,9 +327,14 @@ begin
 	begin
 		//WriteLn(arrayQueryPorts[i].localIp + Chr(9) + arrayQueryPorts[i].remoteIp + Chr(9) + arrayQueryPorts[i].port + Chr(9) + arrayQueryPorts[i].protocol);
 		r := DoPortQuery(arrayQueryPorts[i].remoteIp, arrayQueryPorts[i].port, arrayQueryPorts[i].protocol);
+		
 		arrayQueryPorts[i].status := r;
+		
+		// Issue-5: Write the current date time in the checked field.
+		arrayQueryPorts[i].checked := GetProperDateTime(Now());
+		
 		// Fix issue#2: array loop is from 0 to high, display is i + 1.
-		WriteLn(TAB, i + 1, '/', giTotalPortsToCheck, ':', TAB, 'RESULT=', r);
+		WriteLn(TAB, i + 1, '/', giTotalPortsToCheck, ':', TAB, arrayQueryPorts[i].remoteIp, ' (', arrayQueryPorts[i].port, '/', arrayQueryPorts[i].protocol, ')', TAB, 'RESULT=', r);
 	end;
 end;
 
