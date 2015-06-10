@@ -590,44 +590,6 @@ var
 	l: string;
 	lineArray: TStringArray;
 begin
-	//PortAdd('88', 'TCP');
-	//PortAdd('135', 'TCP');
-	//PortAdd('389', 'TCP');
-	//PortAdd('445', 'TCP');
-	//PortAdd('464', 'TCP');
-	//PortAdd('3268', 'TCP');
-	//PortAdd('3269', 'TCP');
-	
-	//PortShow();
-
-	// Now add the extra servers and ports to the systems to query.
-	
-	// VM70AS003.rec.nsint, WSUS, McAfee EPO
-	//PortQueryAdd(localIp, '10.4.222.15', '3389', 'TCP'); 	// 1
-	//PortQueryAdd(localIp, '10.4.222.16', '3389', 'TCP'); 	// 2
-	//PortQueryAdd(localIp, '10.4.222.17', '80', 'TCP'); 		// 3
-	//PortQueryAdd(localIp, '10.4.222.17', '443', 'TCP'); 	// 4
-	//PortQueryAdd(localIp, '10.4.222.17', '8081', 'TCP'); 	// 5
-	//PortQueryAdd(localIp, '10.4.222.17', '8443', 'TCP');	// 6
-	//PortQueryAdd(localIp, '10.4.222.17', '8444', 'TCP');	// 7
-	//PortQueryAdd(localIp, '10.4.222.17', '8530', 'TCP');	// 8
-	
-	// VM70AS004.rec.nsint, SCOM
-	//PortQueryAdd(localIp, '10.4.222.18', '5723', 'TCP');	// 9
-	
-	// VM70AS006.rec.nsint, Splunk SMB
-	//PortQueryAdd(localIp, '10.4.222.20', '445', 'TCP');		// 10
-				
-	// VM00AS1346.prod.ns.nl KMS
-	//PortQueryAdd(localIp, '10.4.139.104', '1688', 'TCP');	// 11
-	
-	// Add DNS servers
-	//PortQueryAdd(localIp, '10.4.34.12', '53', 'TCP');		// 12
-	//PortQueryAdd(localIp, '10.4.34.11', '53', 'TCP');		// 13
-	//PortQueryAdd(localIp, '10.12.145.11', '53', 'TCP');		// 14
-
-	
-	
 	// Issue-4: Read the ports to query per DC from a config file.
 	// Set the lienArray on 0 (Clear it)
 	SetLength(lineArray, 0);
@@ -636,13 +598,10 @@ begin
 	Reset(f);
 	repeat
 		ReadLn(f, l);
-		//WriteLn(l);
 		// Split the line into the lineArray
 		lineArray := SplitString(l, ';');
 		
 		PortAdd(lineArray[0], lineArray[1]);
-		//WriteLn(TAB, lineArray[0]);
-		//WriteLn(TAB, lineArray[1]);
 	until Eof(f);
 	CloseFile(f);
 	
@@ -655,19 +614,12 @@ begin
 	Reset(f);
 	repeat
 		ReadLn(f, l);
-		//WriteLn(l);
 		// Split the line into the lineArray
 		lineArray := SplitString(l, ';');
 		
 		PortQueryAdd(localIp, lineArray[0], lineArray[1], lineArray[2]);
-		//WriteLn(TAB, lineArray[0]);
-		//WriteLn(TAB, lineArray[1]);
-		//WriteLn(TAB, lineArray[2]);
 	until Eof(f);
 	CloseFile(f);
-	
-	// Count in the procedure PortQueryAdd
-	//giTotalPortsToCheck := giTotalPortsToCheck + 14;
 	
 	// Query all domain trusts
 	GetAllDomainTrusts();
@@ -681,8 +633,7 @@ begin
 	// Perform a port query per port.
 	PortQueryOnAll();
 	
-	//PortQueryShowWithResult();
-	
+	// Make all the output as requested by the command line options.
 	if gbDoCsv = true then
 		// Output to CSV when selected on the command line.
 		ExportResultToCsv();
@@ -701,6 +652,15 @@ var
 begin
 	//WriteLn(GetBaseDn());
 	//WriteLn(ResolveFqdn('10.145.193.15'));
+	
+	WriteLn('PROGTEST()');
+	
+	localIp := GetLocalIp();
+	WriteLn('LOCALIP=', localIp);
+	
+	gsLocalFqdn := ResolveFqdnDc(localIp);
+	WriteLn('gsLocalFqdn=', gsLocalFqdn);
+		
 	{
 	ip := '10.4.68.17';
 	WriteLn('RESOLVE ' + ip + ' TO FQDN: ' + ResolveFqdnDc(ip));
@@ -711,10 +671,8 @@ begin
 	ip := '10.4.68.14';
 	WriteLn('RESOLVE ' + ip + ' TO FQDN: ' + ResolveFqdnDc(ip));
 	}
-	ip := '10.4.68.16';
-	WriteLn('RESOLVE ' + ip + ' TO FQDN: ' + ResolveFqdnDc(ip));
-	
-	
+	//ip := '10.4.68.16';
+	//WriteLn('RESOLVE ' + ip + ' TO FQDN: ' + ResolveFqdnDc(ip));
 end; // of procedure ProgTest
 
 
@@ -726,8 +684,8 @@ end; // of procedure ProgInit
 
 
 begin
-	ProgInit();
-	ProgRun();
-	//ProgTest();
-	ProgDone();
+	//ProgInit();
+	//ProgRun();
+	ProgTest();
+	//ProgDone();
 end. // of program PortQueryDomainController.
