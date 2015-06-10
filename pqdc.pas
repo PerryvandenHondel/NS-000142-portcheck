@@ -496,19 +496,19 @@ begin
 
 	WriteLn();
 	WriteLn('Switches:');
-	WriteLn(TAB + '--csv                    Output in CSV format, seperator char is ;');
-	WriteLn(TAB + '--sql                    Output in SQL format');
-	WriteLn(TAB + '--resolve                Also resolve the IP address to FQDN''s');
+	WriteLn(TAB + '--output-csv             Output in CSV format, separator char is '';''');
+	WriteLn(TAB + '--output-sql             Output in SQL format');
+	WriteLn(TAB + '--resolve-fqdn          	Also resolve the IP address to FQDN''s');
 	WriteLn(TAB + '--help, -h, -?           Show the help');
 	WriteLn();
 	WriteLn('Usage:');
 	WriteLn(TAB + p + ' [switche(s)]');
 	WriteLn();
 	WriteLn('Examples:');
-	WriteLn(TAB + p + ' --csv               Run the program an output in a CSV file.');
-	WriteLn(TAB + p + ' --csv --resolve     Run the program an output in a CSV file and resolve IP addresses to a FQDN''s.');
-	WriteLn(TAB + p + ' --sql               Run the program an output in a SQL import file.');
-	
+	WriteLn(TAB + p + ' --output-csv               Run the program an output in a CSV file.');
+	WriteLn(TAB + p + ' --output-csv --resolve     Run the program an output in a CSV file and resolve IP addresses to a FQDN''s.');
+	WriteLn(TAB + p + ' --output-sql               Run the program an output in a SQL import file.');
+	WriteLn;
 end; // of procedure ProgramUsage()
 
 
@@ -540,17 +540,17 @@ begin
 			//Writeln(i, ': ', ParamStr(i));
 			
 			case LowerCase(ParamStr(i)) of
-				'--csv':
+				'--output-csv':
 					begin
 						gbDoCsv := true;
 						WriteLn('Output in CSV format');
 					end;
-				'--sql':
+				'--output-sql':
 					begin
 						gbDoSql := true;
 						WriteLn('Output in SQL format');
 					end;
-				'--resolve':
+				'--resolve-fqdn':
 					begin
 						gbDoResolve := true;
 						WriteLn('FQDN resolve on');
