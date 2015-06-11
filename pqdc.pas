@@ -15,9 +15,11 @@
 //		3) Check with portqry.exe the ports.
 //
 //	VERSION:
-//		01	2015-06-03	Initial version
-//		
+//		01				2015-06-03	Initial version.
+//		01-issue-8		2015-06-11	Use an resolve file to resolve the FQDn of IP addresses.
 //
+//	
+//	
 //		portqry -n 10.0.0.1 -e 53 -p UDP
 //
 //
@@ -35,6 +37,7 @@
 //		procedure PortShow
 //		procedure GetIpsPerDnsDomain
 //		procedure GetAllDcIpPerDnsDomain
+//		function GetFqdn(searchIp: string): string;
 //
 
 
@@ -68,7 +71,7 @@ type
 		port: string;			// The port number to check.
 		protocol: string;		// The protocol to test: UDP or TCP.
 		status: integer;		// Result of the portqry. 0=OK, 1=NOT LISTENING, 2=FILTERED or LISTENING
-	end;
+	end; // of record RQueryPorts.
 
 	TQueryPorts = array of RQueryPorts;
 
@@ -77,13 +80,21 @@ type
 		port: string;
 		portDescription: string;
 		protocol: string;
-	end;
+	end; // of record RPort.
 
 	TPort = array of RPort;
 
+	
+	RResolve = record
+		ip: string;				// IP address
+		fqdn: string;			// FQDN of the IP address
+	end; // of record RResolve.
+	
+	TResolve = array of RResolve;
+	
 
 	
- var
+var
 	arrayQueryPorts: TQueryPorts;
 	arrayPort: TPort;
 	localIp: string;
@@ -94,6 +105,7 @@ type
 	gbDoCsv: boolean;
 	gbDoSql: boolean;
 	gsLocalFqdn: string;				// Local FQDN.
+	gaResolve: TResolve;				// 
 	
 
 
@@ -145,59 +157,29 @@ end; // of procedure GetAllDomainTrusts
 
 
 
-function ResolveFqdnDcOld(ip: string): string;
+function GetFqdn(searchIp: string): string;
 //
-// Resolve the IP to an FQDN
-// Redo it until the result doesn't contain:
-//	1)	._msdcs in the FQDN
-//	2) 	the FQDN <> current domain name.
+// Search for the searchIp, returns the FQDN.
+//
+// Returns 'N/A' when not found.
 //
 var
-	bCorrect: boolean;
-	x: integer;
-	fqdn: string;
-	sDnsDomain: string;
-begin
-	
-	bCorrect := false;
-	x := 0;
-	sDnsDomain := GetDnsDomain();
-	repeat
-		x := x + 1;
-		fqdn := ResolveFqdn(ip);
-		//WriteLn(TAB, x, TAB, 'fqdn=', fqdn, TAB, sDnsDomain);
-		
-		if (Pos('._msdcs.', fqdn) = 0) and (fqdn <> sDnsDomain) then
-			bCorrect := true;
-	until bCorrect = true;
-	ResolveFqdnDcOld := fqdn;
-end; // of function ResolveFdqnDc.
-
-
-
-function ResolveFqdnDc(ip: string): string;
-var
-	i: integer;
-	resolved: string;
 	r: string;
+	i: integer;
 begin
-	r := '';
-	for i := 1 to 3 do
+	r := 'N/A';
+	
+	for i := 0 to High(gaResolve) do
 	begin
-		resolved :=  ResolveFqdn(ip);
-		//WriteLn('ResolveFqdnDc2(): ', i, TAB, resolved);
-		if Pos('gc._msdcs.', resolved) = 0 then
-			r := resolved;
-		//else
-		//	WriteLn('AI, AI, AI, GC FQDN found');
-		//WriteLn('R=', r);
-		
-		if Length(r) > Length(resolved) then
-			ResolveFqdnDc := r
-		else
-			ResolveFqdnDc  := resolved;
-	end; // of for
-end;
+		if searchIp = gaResolve[i].ip then
+		begin
+			r := gaResolve[i].fqdn;
+			WriteLn('FOUND FQDN ', r,  ' FOR IP ', searchIp);
+			break;
+		end;
+	end; // of for.
+	GetFqdn := r;
+end; // of function GetFqdn.
 
 
 
@@ -278,7 +260,7 @@ begin
 		
 		// Add the FQDN of the remote IP to the buffer.
 		if gbDoResolve = true then
-			buffer := buffer + ResolveFqdnDc(arrayQueryPorts[i].remoteIp) + SEP;
+			buffer := buffer + GetFqdn(arrayQueryPorts[i].remoteIp) + SEP;
 			
 		// Add the port to buffer.
 		buffer := buffer + arrayQueryPorts[i].port + SEP;
@@ -295,7 +277,7 @@ begin
 		else
 			buffer := buffer + 'F';
 	
-		// Write to screen.
+		//Write to screen.
 		//WriteLn(buffer);
 		
 		// Write to the CSV file.
@@ -360,7 +342,8 @@ begin
 		arrayQueryPorts[i].checked := GetProperDateTime(Now());
 		
 		// Fix issue#2: array loop is from 0 to high, display is i + 1.
-		WriteLn(TAB, i + 1, '/', giTotalPortsToCheck, ':', TAB, arrayQueryPorts[i].remoteIp, ' (', arrayQueryPorts[i].port, '/', arrayQueryPorts[i].protocol, ')', TAB, 'RESULT=', r);
+		//WriteLn(TAB, i + 1, '/', giTotalPortsToCheck, ':', TAB, arrayQueryPorts[i].remoteIp, ' (', arrayQueryPorts[i].port, '/', arrayQueryPorts[i].protocol, ')', TAB, 'RESULT=', r);
+		Write(TAB, i + 1, '/', giTotalPortsToCheck, ':', TAB, arrayQueryPorts[i].remoteIp, ' (', arrayQueryPorts[i].port, '/', arrayQueryPorts[i].protocol, ')', TAB, 'RESULT=', r, #13);
 	end;
 end;
 
@@ -503,6 +486,45 @@ end; // of procedure GetAllDcsPerDnsDomain.
 
 
 
+procedure ReadResolveConfig();
+//
+//	Read the fqdn resolve file and place in the array.
+//
+var
+	f: TextFile;
+	l: string;
+	i: integer;
+	aLine: TStringArray;
+begin
+	//WriteLn('ReadResolveConfig()');
+	
+	SetLength(aLine, 0);
+	
+	Assign(f, 'pqdc-fqdn.conf');
+	{I+}
+	Reset(f);
+	repeat
+		ReadLn(f, l);
+		//WriteLn(l);
+		
+		aLine := SplitString(l, ';');
+		
+		i := Length(gaResolve);
+		SetLength(gaResolve, i + 1);
+		
+		gaResolve[i].ip := aLine[0];
+		gaResolve[i].fqdn := aLine[1];
+	until Eof(f);
+	Close(f);
+	
+	// Show the contents of the array gaResolve.
+	for i := 0 To High(gaResolve) do
+	begin
+		WriteLn(gaResolve[i].ip, TAB, gaResolve[i].fqdn);
+	end; // of for.
+end;
+
+
 
 procedure ProgramTitle();
 begin
@@ -591,18 +613,18 @@ begin
 		end; // of For
 	end;
 	
-	localIp := GetLocalIp();
+	// Build the resolve array.
+	ReadResolveConfig();
 	
+	localIp := GetLocalIp();
 	if gbDoResolve = true then
-		gsLocalFqdn := ResolveFqdnDc(localIp);
-		
+		gsLocalFqdn := GetFqdn(localIp);
+	
 	rootDse := GetBaseDn();
 	
 	fileNameOut := 'pqdc-' + GetCurrentComputerName() + '-' + GetDateFs() + '_' + GetTimeFs();
 	
 	giTotalPortsToCheck := 0;
-	
-	gsLocalFqdn := localIp;
 	
 	WriteLn('Output in:  ' + fileNameOut);
 	WriteLn('Local IP:   ' + localIp);
@@ -635,6 +657,7 @@ begin
 		PortAdd(lineArray[0], lineArray[1]);
 	until Eof(f);
 	CloseFile(f);
+	
 	
 	// Issue-4: Read extra systems and ports from config file.
 	// Set the lienArray on 0 (Clear it)
@@ -686,12 +709,15 @@ begin
 	
 	WriteLn('PROGTEST()');
 	
-	localIp := GetLocalIp();
-	WriteLn('LOCALIP=', localIp);
+	//localIp := GetLocalIp();
+	//WriteLn('LOCALIP=', localIp);
 	
-	gsLocalFqdn := ResolveFqdnDc(localIp);
-	WriteLn('gsLocalFqdn=', gsLocalFqdn);
-		
+	//gsLocalFqdn := ResolveFqdnDc(localIp);
+	//WriteLn('gsLocalFqdn=', gsLocalFqdn);
+	
+	
+	//WriteLn(GetFqdn('10.4.34.12'));
+	
 	{
 	ip := '10.4.68.17';
 	WriteLn('RESOLVE ' + ip + ' TO FQDN: ' + ResolveFqdnDc(ip));
