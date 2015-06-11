@@ -23,6 +23,7 @@
 //
 //	FUNCTIONS AND PROCEDURES:
 //		function DoPortQuery
+//		function ResolveFqdnDc(ip: string): string;
 //		procedure GetAllDomainTrusts
 //		procedure PortQueryAdd
 //		procedure PortQueryShow
@@ -144,7 +145,7 @@ end; // of procedure GetAllDomainTrusts
 
 
 
-function ResolveFqdnDc(ip: string): string;
+function ResolveFqdnDcOld(ip: string): string;
 //
 // Resolve the IP to an FQDN
 // Redo it until the result doesn't contain:
@@ -169,8 +170,34 @@ begin
 		if (Pos('._msdcs.', fqdn) = 0) and (fqdn <> sDnsDomain) then
 			bCorrect := true;
 	until bCorrect = true;
-	ResolveFqdnDc := fqdn;
+	ResolveFqdnDcOld := fqdn;
 end; // of function ResolveFdqnDc.
+
+
+
+function ResolveFqdnDc(ip: string): string;
+var
+	i: integer;
+	resolved: string;
+	r: string;
+begin
+	r := '';
+	for i := 1 to 3 do
+	begin
+		resolved :=  ResolveFqdn(ip);
+		//WriteLn('ResolveFqdnDc2(): ', i, TAB, resolved);
+		if Pos('gc._msdcs.', resolved) = 0 then
+			r := resolved;
+		//else
+		//	WriteLn('AI, AI, AI, GC FQDN found');
+		//WriteLn('R=', r);
+		
+		if Length(r) > Length(resolved) then
+			ResolveFqdnDc := r
+		else
+			ResolveFqdnDc  := resolved;
+	end; // of for
+end;
 
 
 
@@ -553,7 +580,7 @@ begin
 				'--resolve-fqdn':
 					begin
 						gbDoResolve := true;
-						WriteLn('FQDN resolve on');
+						WriteLn('Resolve the IP addresses to a FQDN.');
 					end;
 				'--help', '-h', '-?':
 					begin
@@ -577,9 +604,13 @@ begin
 	
 	gsLocalFqdn := localIp;
 	
-	WriteLn('Output in: ' + fileNameOut);
-	WriteLn('Local IP:  ' + localIp);
-	WriteLn('Root DSE:  ' + rootDse);
+	WriteLn('Output in:  ' + fileNameOut);
+	WriteLn('Local IP:   ' + localIp);
+	
+	if gbDoResolve = true then
+		WriteLn('Local FQDN: ' + gsLocalFqdn);
+	
+	WriteLn('Root DSE:   ' + rootDse);
 end; // of procedure ProgInit
 
 
@@ -646,8 +677,8 @@ end; // of procedure ProgInit
 
 
 procedure ProgTest();
-var
-	ip: string;
+//var
+	//ip: string;
 
 begin
 	//WriteLn(GetBaseDn());
@@ -684,8 +715,8 @@ end; // of procedure ProgInit
 
 
 begin
-	//ProgInit();
-	//ProgRun();
-	ProgTest();
-	//ProgDone();
+	ProgInit();
+	ProgRun();
+	//ProgTest();
+	ProgDone();
 end. // of program PortQueryDomainController.
