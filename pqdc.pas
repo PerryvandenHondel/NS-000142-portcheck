@@ -41,7 +41,6 @@
 //
 
 
-
 program DomainControllerPortQuery;
 
 
@@ -131,7 +130,6 @@ begin
 end; // of procedure DoPortQuery.
 
 
-
 procedure GetAllDomainTrusts();
 //
 //	Use ADFIND to make a list to get all trusts into a file trust.tmp
@@ -149,7 +147,6 @@ begin
 	p.Options := [poWaitOnExit];	// Wait until the external program is finished.
 	p.Execute;
 end; // of procedure GetAllDomainTrusts
-
 
 
 function GetFqdn(searchIp: string): string;
@@ -177,7 +174,6 @@ begin
 end; // of function GetFqdn.
 
 
-
 procedure PortQueryAdd(newLocalIp: string; newRemoteIp: string; newPort: string; newProtocol: string);
 var
 	i: integer;
@@ -192,7 +188,6 @@ begin
 	
 	giTotalPortsToCheck := giTotalPortsToCheck + 1
 end; // of procedure PortQueryAdd.
-
 
 
 procedure PortQueryShow();
@@ -219,7 +214,6 @@ begin
 		WriteLn(arrayQueryPorts[i].localIp + TAB + arrayQueryPorts[i].remoteIp + TAB + arrayQueryPorts[i].port + TAB + arrayQueryPorts[i].protocol + TAB + IntToStr(arrayQueryPorts[i].status));
 	end;
 end;
-
 
 
 procedure ExportResultToCsv();
@@ -606,8 +600,6 @@ begin
 end; // of procedure ReadConfigExtra
 
 
-
-
 procedure ProgramTitle();
 begin
 	WriteLn();
@@ -616,7 +608,6 @@ begin
 	WriteLn(DESCRIPTION);
 	WriteLn(StringOfChar('-', 80));	
 end; // of procedure ProgramTitle()
-
 
 
 procedure ProgramUsage();
@@ -748,11 +739,7 @@ begin
 end; // of procedure ProgInit
 
 
-
 procedure ProgTest();
-//var
-	//ip: string;
-
 begin
 	//WriteLn(GetBaseDn());
 	//WriteLn(ResolveFqdn('10.145.193.15'));
@@ -784,11 +771,9 @@ begin
 end; // of procedure ProgTest
 
 
-
 procedure ProgDone();
 begin
 end; // of procedure ProgInit
-
 
 
 begin
