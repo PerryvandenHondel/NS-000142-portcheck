@@ -16,7 +16,7 @@
 //
 //	VERSION:
 //		01				2015-06-03	Initial version.
-//		01-issue-8		2015-06-11	Use an resolve file to resolve the FQDn of IP addresses.
+//		01-issue-8		2015-06-11	Use an resolve file to resolve the FQDN of IP addresses.
 //
 //	
 //	
@@ -55,13 +55,15 @@ uses
   USupportLibrary;
 
 
-  
- const
+const
 	TAB = 					#9;
 	VERSION =				'01';
 	DESCRIPTION =			'PortQueryDomainController';
 	ID = 					'142';		
-
+	FNAME_EXTRA =			'pqdc-extra.conf';
+	FNAME_PORT = 			'pqdc-port.conf';
+	FNAME_FQDN = 			'pqdc-fqdn.conf';
+	
 
 type
 	RQueryPorts = record
@@ -72,27 +74,21 @@ type
 		protocol: string;		// The protocol to test: UDP or TCP.
 		status: integer;		// Result of the portqry. 0=OK, 1=NOT LISTENING, 2=FILTERED or LISTENING
 	end; // of record RQueryPorts.
-
 	TQueryPorts = array of RQueryPorts;
 
-	
 	RPort = record
 		port: string;
 		portDescription: string;
 		protocol: string;
 	end; // of record RPort.
-
 	TPort = array of RPort;
 
-	
 	RResolve = record
 		ip: string;				// IP address
 		fqdn: string;			// FQDN of the IP address
 	end; // of record RResolve.
-	
 	TResolve = array of RResolve;
 	
-
 	
 var
 	arrayQueryPorts: TQueryPorts;
@@ -107,7 +103,6 @@ var
 	gsLocalFqdn: string;				// Local FQDN.
 	gaResolve: TResolve;				// 
 	
-
 
 function DoPortQuery(remoteIp: string; port: string; protocol: string): integer;
 //
@@ -246,6 +241,19 @@ begin
 	
 	WriteLn;
 	WriteLn('ExportResultToCsv() ' + fileNameOut + '.csv');
+	
+	// Write the header line in the CSV.
+	buffer := 'LocalIp' + SEP;
+	if gbDoResolve = true then
+		buffer := buffer + 'LocalFqdn' + SEP;
+	buffer := buffer + 'RemoteIp' + SEP;
+	if gbDoResolve = true then
+		buffer := buffer + 'RemoteFqdn' + SEP;
+	buffer := buffer + 'Port' + SEP;
+	buffer := buffer + 'Protocol' + SEP;
+	buffer := buffer + 'Status';
+	WriteLn(f, buffer);
+	
 	for i := 0 to High(arrayQueryPorts) do
 	begin
 		// Add the local IP to the buffer.
@@ -281,17 +289,15 @@ begin
 		//WriteLn(buffer);
 		
 		// Write to the CSV file.
-		WriteLn(f,buffer);
+		WriteLn(f, buffer);
 	end;
 	CloseFile(f);
 end;
 
 
-
 procedure ExportResultToSql();
 const
 	SEP = #59;
-
 var
 	i: integer;
 	f: TextFile;
@@ -348,7 +354,6 @@ begin
 end;
 
 
-
 procedure PortAdd(newPort: string; newProtocol: string);
 //
 // Add a new port to the query array.
@@ -363,7 +368,6 @@ begin
 	arrayPort[i].port := newPort;
 	arrayPort[i].protocol := newProtocol;
 end;
-
 
 
 procedure PortShow();
@@ -382,7 +386,6 @@ begin
 end;
 
 
-
 procedure GetIpsPerDnsDomain(dns: string);
 //
 // Do a nslookup and resolve all IP addresses of Domaion Controllers an AD domain.
@@ -396,69 +399,75 @@ var
 	foundCount: integer;
 	i: integer;
 	remoteIp: string;
+	fname: string;
 begin
 	WriteLn;
 	WriteLn('GetIpsPerDnsDomain(' + dns + ')');
 
+	fname := 'ipdc-' + dns + '.tmp';
+	
 	Sleep(1000);
 	
 	// Create a text file ipdc-domain.tmp
 	p := TProcess.Create(nil);
 	p.Executable := 'cmd.exe'; 
-    p.Parameters.Add('/c nslookup -timeout=5 ' + dns + '>ipdc-' + dns + '.tmp');
+    p.Parameters.Add('/c nslookup -timeout=5 ' + dns + '>' + fname);
 	p.Options := [poWaitOnExit];
 	p.Execute;
 	
 	foundName := false;
 	
 	// Open the text file and read the lines from it.
-	Assign(f, 'ipdc-' + dns + '.tmp');
-	
+	Assign(f, fname);
 	{I+}
-	Reset(f);
-	repeat
-		ReadLn(f, line);
-		//WriteLn('GetIpsPerDnsDomain(): ',  line);
+	try
+		Reset(f);
+		repeat
+			ReadLn(f, line);
+			//WriteLn('GetIpsPerDnsDomain(): ',  line);
 		
-		If Pos('Name:', line) > 0 then
-		begin
-			// When the text 'Name:' is found. All the next lines contain 
-			// IP addresses of the Domain Controllers of the domain.
-			foundName := true;
-			foundCount := 0;
-		end;
-		
-		if foundName = true then
-		begin
-			foundCount := foundCount + 1;
-			if foundCount > 1 then
+			If Pos('Name:', line) > 0 then
 			begin
-				//WriteLn(Chr(9), 'ONLY THIS LINES: ', foundCount, Chr(9), line);
-			
-				// Remove all text 'Address:' from the line.
-				remoteIp := Trim(StringReplace(line, 'Address:', '', [rfIgnoreCase]));
-			
-				// Remove all text 'Addresses:' from the newLine.
-				remoteIp := Trim(StringReplace(remoteIp, 'Addresses:', '', [rfIgnoreCase]));
-			
-				// Only add a new port to query when:
-				// 1) the remoteIP contains data,
-				// 2) It's a IPv4 address, skip IPv6 addresses.
-				if (Length(remoteIp) > 0) and (Pos(':', remoteIp) = 0) then
+				// When the text 'Name:' is found. All the next lines contain 
+				// IP addresses of the Domain Controllers of the domain.
+				foundName := true;
+				foundCount := 0;
+			end;
+		
+			if foundName = true then
+			begin
+				foundCount := foundCount + 1;
+				if foundCount > 1 then
 				begin
-					for i := 0 to High(arrayPort) do
+					//WriteLn(Chr(9), 'ONLY THIS LINES: ', foundCount, Chr(9), line);
+			
+					// Remove all text 'Address:' from the line.
+					remoteIp := Trim(StringReplace(line, 'Address:', '', [rfIgnoreCase]));
+				
+					// Remove all text 'Addresses:' from the newLine.
+					remoteIp := Trim(StringReplace(remoteIp, 'Addresses:', '', [rfIgnoreCase]));
+			
+					// Only add a new port to query when:
+					// 1) the remoteIP contains data,
+					// 2) It's a IPv4 address, skip IPv6 addresses.
+					if (Length(remoteIp) > 0) and (Pos(':', remoteIp) = 0) then
 					begin
-						// Increase the counter of tests to do.
-						//giTotalPortsToCheck := giTotalPortsToCheck + 1;
-						PortQueryAdd(localIp, remoteIp, arrayPort[i].port, arrayPort[i].protocol);
+						for i := 0 to High(arrayPort) do
+						begin
+							// Increase the counter of tests to do.
+							//giTotalPortsToCheck := giTotalPortsToCheck + 1;
+							PortQueryAdd(localIp, remoteIp, arrayPort[i].port, arrayPort[i].protocol);
+						end;
 					end;
 				end;
 			end;
-		end;
-	until Eof(f);
-	Close(f);
+		until Eof(f);
+		Close(f);
+	except
+		on E: EInOutError do
+			WriteLn('File ', fname, ' handeling error occurred, Details: ', E.ClassName, '/', E.Message);
+	end;
 end; // of procedure GetIpsPerDnsDomain.
-
 
 
 procedure GetAllDcIpPerDnsDomain();
@@ -468,22 +477,28 @@ procedure GetAllDcIpPerDnsDomain();
 var
 	f: TextFile;
 	line: String;
+	fname: string;
 begin
 	WriteLn;
 	WriteLn('GetAllDcsPerDnsDomain()');
-	Assign(f, 'trusts.tmp');
+	
+	fname := 'trusts.tmp';
+	Assign(f, fname);
 	
 	{I+}
-	
-	Reset(f);
-	repeat
-		ReadLn(f, line);
-		//WriteLn(s);
-		GetIpsPerDnsDomain(LowerCase(line));
-	until Eof(f);
-	Close(f);
+	try
+		Reset(f);
+		repeat
+			ReadLn(f, line);
+			//WriteLn(s);
+			GetIpsPerDnsDomain(LowerCase(line));
+		until Eof(f);
+		Close(f);
+	except
+		on E: EInOutError do
+			WriteLn('File ', fname, ' handeling error occurred, Details: ', E.ClassName, '/', E.Message);
+	end;
 end; // of procedure GetAllDcsPerDnsDomain.
-
 
 
 procedure ReadResolveConfig();
@@ -496,33 +511,100 @@ var
 	i: integer;
 	aLine: TStringArray;
 begin
-	//WriteLn('ReadResolveConfig()');
+	WriteLn('ReadResolveConfig(): Trying to open file: ', FNAME_FQDN);
 	
 	SetLength(aLine, 0);
 	
-	Assign(f, 'pqdc-fqdn.conf');
+	Assign(f, FNAME_FQDN);
 	{I+}
-	Reset(f);
-	repeat
-		ReadLn(f, l);
-		//WriteLn(l);
+	try
+		Reset(f);
+		WriteLn('Opened');
+		repeat
+			ReadLn(f, l);
+			WriteLn(l);
 		
-		aLine := SplitString(l, ';');
+			aLine := SplitString(l, ';');
 		
-		i := Length(gaResolve);
-		SetLength(gaResolve, i + 1);
+			i := Length(gaResolve);
+			SetLength(gaResolve, i + 1);
 		
-		gaResolve[i].ip := aLine[0];
-		gaResolve[i].fqdn := aLine[1];
-	until Eof(f);
-	Close(f);
+			gaResolve[i].ip := aLine[0];
+			gaResolve[i].fqdn := aLine[1];
+		until Eof(f);
+		Close(f);
 	
-	// Show the contents of the array gaResolve.
-	for i := 0 To High(gaResolve) do
-	begin
-		WriteLn(gaResolve[i].ip, TAB, gaResolve[i].fqdn);
-	end; // of for.
+		// Show the contents of the array gaResolve.
+		for i := 0 To High(gaResolve) do
+		begin
+			WriteLn(gaResolve[i].ip, TAB, gaResolve[i].fqdn);
+		end; // of for.
+	except
+		on E: EInOutError do
+			WriteLn('File ', FNAME_FQDN, ' handeling error occurred, Details: ', E.ClassName, '/', E.Message);
+	end;
 end;
+
+
+procedure ReadConfigPort();
+var
+	f: TextFile;
+	l: string;
+	lineArray: TStringArray;
+begin
+	// Issue-4: Read the ports to query per DC from a config file.
+	// Set the lienArray on 0 (Clear it)
+	SetLength(lineArray, 0);
+	AssignFile(f, FNAME_PORT);
+	WriteLn('ReadConfigPort(): Trying to open file ', FNAME_PORT);
+	try
+		Reset(f);
+		WriteLn('Openend');
+		repeat
+			ReadLn(f, l);
+			// Split the line into the lineArray
+			lineArray := SplitString(l, ';');
+		
+			PortAdd(lineArray[0], lineArray[1]);
+		until Eof(f);
+		CloseFile(f);
+	except
+		on E: EInOutError do
+			WriteLn('File ', FNAME_PORT, ' handeling error occurred, Details: ', E.ClassName, '/', E.Message);
+	end;
+end;  // of procedure ReadConfigPort()
+
+
+procedure ReadConfigExtra();
+var
+	f: TextFile;
+	l: string;
+	lineArray: TStringArray;
+	fname: string;
+begin
+	// Issue-4: Read extra systems and ports from config file.
+	// Set the lienArray on 0 (Clear it)
+	SetLength(lineArray, 0);
+		
+	fname := 'pqdc-extra.conf';
+	AssignFile(f, fname);
+	{I+}
+	try 
+		Reset(f);
+		repeat
+			ReadLn(f, l);
+			// Split the line into the lineArray
+			lineArray := SplitString(l, ';');
+		
+			PortQueryAdd(localIp, lineArray[0], lineArray[1], lineArray[2]);
+		until Eof(f);
+		CloseFile(f);
+	except
+		on E: EInOutError do
+			WriteLn('File ', fname, ' handeling error occurred, Details: ', E.ClassName, '/', E.Message);
+	end;
+end; // of procedure ReadConfigExtra
+
 
 
 
@@ -559,7 +641,6 @@ begin
 	WriteLn(TAB + p + ' --output-sql               Run the program an output in a SQL import file.');
 	WriteLn;
 end; // of procedure ProgramUsage()
-
 
 
 procedure ProgInit();
@@ -616,6 +697,12 @@ begin
 	// Build the resolve array.
 	ReadResolveConfig();
 	
+	// Read the ports to query from a configuration file.
+	ReadConfigPort();
+	
+	// Read the Extra server and ports to query from a configuration file.
+	ReadConfigExtra();
+	
 	localIp := GetLocalIp();
 	if gbDoResolve = true then
 		gsLocalFqdn := GetFqdn(localIp);
@@ -636,45 +723,8 @@ begin
 end; // of procedure ProgInit
 
 
-
 procedure ProgRun();
-var
-	f: TextFile;
-	l: string;
-	lineArray: TStringArray;
 begin
-	// Issue-4: Read the ports to query per DC from a config file.
-	// Set the lienArray on 0 (Clear it)
-	SetLength(lineArray, 0);
-	AssignFile(f, 'pqdc-port.conf');
-	{I+}
-	Reset(f);
-	repeat
-		ReadLn(f, l);
-		// Split the line into the lineArray
-		lineArray := SplitString(l, ';');
-		
-		PortAdd(lineArray[0], lineArray[1]);
-	until Eof(f);
-	CloseFile(f);
-	
-	
-	// Issue-4: Read extra systems and ports from config file.
-	// Set the lienArray on 0 (Clear it)
-	SetLength(lineArray, 0);
-		
-	AssignFile(f, 'pqdc-extra.conf');
-	{I+}
-	Reset(f);
-	repeat
-		ReadLn(f, l);
-		// Split the line into the lineArray
-		lineArray := SplitString(l, ';');
-		
-		PortQueryAdd(localIp, lineArray[0], lineArray[1], lineArray[2]);
-	until Eof(f);
-	CloseFile(f);
-	
 	// Query all domain trusts
 	GetAllDomainTrusts();
 
@@ -708,7 +758,8 @@ begin
 	//WriteLn(ResolveFqdn('10.145.193.15'));
 	
 	WriteLn('PROGTEST()');
-	
+	ReadConfigPort();
+	ReadResolveConfig();
 	//localIp := GetLocalIp();
 	//WriteLn('LOCALIP=', localIp);
 	
