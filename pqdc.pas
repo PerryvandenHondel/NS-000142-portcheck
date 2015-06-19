@@ -685,8 +685,14 @@ begin
 		end; // of For
 	end;
 	
+
+		
 	// Build the resolve array.
 	ReadResolveConfig();
+	
+	localIp := GetLocalIp();
+	if gbDoResolve = true then
+		gsLocalFqdn := GetFqdn(localIp);
 	
 	// Read the ports to query from a configuration file.
 	ReadConfigPort();
@@ -694,13 +700,9 @@ begin
 	// Read the Extra server and ports to query from a configuration file.
 	ReadConfigExtra();
 	
-	localIp := GetLocalIp();
-	if gbDoResolve = true then
-		gsLocalFqdn := GetFqdn(localIp);
-	
 	rootDse := GetBaseDn();
 	
-	fileNameOut := 'pqdc-' + GetCurrentComputerName() + '-' + GetDateFs() + '_' + GetTimeFs();
+	fileNameOut := 'pqdc-' + GetCurrentComputerName() + '-' + GetDateFs(false) + '_' + GetTimeFs();
 	
 	giTotalPortsToCheck := 0;
 	
