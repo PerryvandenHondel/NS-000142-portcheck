@@ -136,6 +136,7 @@ procedure GetAllDomainTrusts();
 //
 var
 	p: TProcess;
+	f: TextFile;
 begin
 	WriteLn;
 	WriteLn('GetAllDomainTrusts()');
@@ -146,6 +147,13 @@ begin
     p.Parameters.Add('/c adfind.exe -b "CN=System,' + rootDse + '" -f "(objectClass=trustedDomain)" trustPartner -csv  -nodn -nocsvheader -nocsvq >trusts.tmp');
 	p.Options := [poWaitOnExit];	// Wait until the external program is finished.
 	p.Execute;
+	
+	// Fix for hit own domain!
+	WriteLn('Current DNS Domain is: ', GetDnsDomain());
+	AssignFile(f, 'trusts.tmp');
+	Append(f); // Open file to add!
+	WriteLn(f,  GetDnsDomain());
+	CloseFile(f);
 end; // of procedure GetAllDomainTrusts
 
 
