@@ -122,7 +122,12 @@ begin
 	p := TProcess.Create(nil);
 	p.Executable := 'cmd.exe'; 
     p.Parameters.Add('/c portqry.exe -n ' + remoteIp + ' -e ' + port + ' -p ' + protocol + ' -q');
-	p.Options := [poWaitOnExit];
+
+	// Options:
+	//	poWaitOnExit:
+	//	poNoConsole:
+	//	poUsePipes: 
+	p.Options := [poWaitOnExit, poUsePipes];
 
 	p.Execute;
 	
@@ -148,7 +153,7 @@ begin
 	p.Options := [poWaitOnExit];	// Wait until the external program is finished.
 	p.Execute;
 	
-	// Fix for hit own domain!
+	// Fix for hit own domain! ISSUE-9
 	WriteLn('Current DNS Domain is: ', GetDnsDomain());
 	AssignFile(f, 'trusts.tmp');
 	Append(f); // Open file to add!
@@ -245,7 +250,9 @@ begin
 	WriteLn('ExportResultToCsv() ' + fileNameOut + '.csv');
 	
 	// Write the header line in the CSV.
-	buffer := 'LocalIp' + SEP;
+	buffer := 'CheckedOn' + SEP; // Added for issue10
+	
+	buffer := buffer + 'LocalIp' + SEP;
 	if gbDoResolve = true then
 		buffer := buffer + 'LocalFqdn' + SEP;
 	buffer := buffer + 'RemoteIp' + SEP;
@@ -258,8 +265,11 @@ begin
 	
 	for i := 0 to High(arrayQueryPorts) do
 	begin
+		// Add the checked datetime to the line; issue10
+		buffer := arrayQueryPorts[i].checked + SEP;
+		
 		// Add the local IP to the buffer.
-		buffer := arrayQueryPorts[i].localIp + SEP;
+		buffer := buffer + arrayQueryPorts[i].localIp + SEP;
 		
 		// Add the local FQDN to the buffer.
 		if gbDoResolve = true then
